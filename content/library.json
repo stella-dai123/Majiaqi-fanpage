@@ -2,7 +2,7 @@
   "books": [
     {
       "id": "tongwu",
-      "title": "《同居》",
+      "title": "《一步之遥》",
       "chapters": [
         { "id": "c0", "title": "致读者", "date": "2026-02-06", "path": "./content/content/tongju/c0.md" },
         { "id": "c1", "title": "第一章", "date": "2026-02-06", "path": "./content/content/tongju/c1.md" },
