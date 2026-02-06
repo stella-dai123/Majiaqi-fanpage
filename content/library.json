@@ -1,0 +1,12 @@
+{
+  "books": [
+    {
+      "id": "tongwu",
+      "title": "《同居》",
+      "chapters": [
+        { "id": "c1", "title": "第一章：凌晨两点的厨房", "date": "2026-02-06", "path": "./content/tongwu/c1.md" },
+        { "id": "c2", "title": "第二章：灯海", "date": "2026-02-07", "path": "./content/tongwu/c2.md" }
+      ]
+    }
+  ]
+}
