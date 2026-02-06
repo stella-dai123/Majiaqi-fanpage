@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>我的小说连载站</title>
+  <meta name="description" content="多本小说连载｜分章阅读｜持续更新" />
+  <style>
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;margin:0;background:#0b0f14;color:#e5e7eb}
+    header{position:sticky;top:0;background:rgba(11,15,20,.85);backdrop-filter:blur(10px);border-bottom:1px solid #223046}
+    .wrap{max-width:1100px;margin:0 auto;padding:16px}
+    .row{display:flex;gap:14px;flex-wrap:wrap}
+    .card{background:#111827;border:1px solid #223046;border-radius:16px;overflow:hidden}
+    .left{flex:1 1 360px;min-width:320px}
+    .right{flex:2 1 520px;min-width:320px}
+    .hd{padding:12px 14px;border-bottom:1px solid #223046;display:flex;justify-content:space-between;align-items:center}
+    .list{padding:10px}
+    .item{padding:10px 12px;border-radius:12px;cursor:pointer}
+    .item:hover{background:#0b1220}
+    .item.active{outline:1px solid #38bdf8;background:rgba(56,189,248,.10)}
+    .muted{color:#94a3b8;font-size:12px}
+    .reader{padding:16px}
+    #content{white-space:pre-wrap;line-height:1.85}
+    input{width:100%;padding:10px 12px;border-radius:12px;border:1px solid #223046;background:#0b1220;color:#e5e7eb;outline:none}
+    button{padding:10px 12px;border-radius:12px;border:1px solid #223046;background:#0b1220;color:#e5e7eb;cursor:pointer}
+    button:disabled{opacity:.5;cursor:not-allowed}
+    .nav{display:flex;gap:10px;justify-content:space-between;padding:12px 14px;border-top:1px solid #223046}
+    .nav button{width:33%}
+  </style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap">
+      <div>
+        <div style="font-weight:800">我的小说连载站</div>
+        <div class="muted">多本小说 · 分章阅读 · 持续更新</div>
+      </div>
+      <div style="min-width:260px;flex:1 1 320px;max-width:520px">
+        <input id="q" placeholder="搜索：书名 / 章节名 / 正文关键词…" />
+      </div>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+  <div class="row">
+    <section class="card left">
+      <div class="hd">
+        <div style="font-weight:700">书库 / 章节</div>
+        <div class="muted" id="count"></div>
+      </div>
+      <div class="list" id="toc"></div>
+    </section>
+
+    <section class="card right">
+      <div class="reader">
+        <h2 id="title" style="margin:0 0 6px">欢迎</h2>
+        <div class="muted" id="meta"></div>
+        <hr style="border:0;border-top:1px solid #223046;margin:12px 0" />
+        <div id="content" class="muted">左侧选择一本小说与章节开始阅读。</div>
+      </div>
+      <div class="nav">
+        <button id="prev">← 上一章</button>
+        <button id="home">目录</button>
+        <button id="next">下一章 →</button>
+      </div>
+    </section>
+  </div>
+</main>
+
+<script>
+const LS="novel_state_v2";
+let LIB=null;
+let state=JSON.parse(localStorage.getItem(LS)||"null")||{book:null,chapter:null};
+
+const el=(id)=>document.getElementById(id);
+const toc=el("toc"), q=el("q"), title=el("title"), meta=el("meta"), content=el("content");
+const prev=el("prev"), next=el("next"), home=el("home");
+
+function save(){ localStorage.setItem(LS, JSON.stringify(state)); }
+
+async function loadLib(){
+  const res = await fetch("./content/library.json");
+  LIB = await res.json();
+  el("count").textContent = `${LIB.books.length} 本`;
+}
+
+function matches(text, keyword){
+  if(!keyword) return true;
+  return (text||"").toLowerCase().includes(keyword.toLowerCase());
+}
+
+async function openChapter(bookId, chapterId){
+  const book = LIB.books.find(b=>b.id===bookId);
+  if(!book) return;
+  const idx = book.chapters.findIndex(c=>c.id===chapterId);
+  const ch = book.chapters[idx];
+  if(!ch) return;
+
+  state.book=bookId; state.chapter=chapterId; save();
+
+  title.textContent = ch.title;
+  meta.textContent = `${book.title} · ${ch.date||""}`.trim();
+
+  const md = await (await fetch(ch.path)).text();
+  content.className = "";
+  content.textContent = md;
+
+  // left active
+  document.querySelectorAll(".item").forEach(x=>x.classList.remove("active"));
+  const active = document.querySelector(`[data-book="${bookId}"][data-ch="${chapterId}"]`);
+  if(active) active.classList.add("active");
+
+  prev.disabled = !(idx>0);
+  next.disabled = !(idx < book.chapters.length-1);
+
+  prev.onclick = ()=>openChapter(bookId, book.chapters[idx-1].id);
+  next.onclick = ()=>openChapter(bookId, book.chapters[idx+1].id);
+}
+
+function renderTOC(keyword=""){
+  toc.innerHTML = "";
+  for(const book of LIB.books){
+    // filter book if no chapter matches
+    const bookHit = matches(book.title+" "+(book.desc||""), keyword);
+    const chs = book.chapters.filter(c => bookHit || matches(c.title+" "+(c.date||""), keyword));
+    if(keyword && !bookHit && chs.length===0) continue;
+
+    const bookDiv=document.createElement("div");
+    bookDiv.className="item";
+    bookDiv.innerHTML = `<div style="font-weight:800">${book.title}</div><div class="muted">${book.desc||""}</div>`;
+    toc.appendChild(bookDiv);
+
+    for(const ch of chs){
+      const d=document.createElement("div");
+      d.className="item";
+      d.style.marginLeft="10px";
+      d.dataset.book=book.id;
+      d.dataset.ch=ch.id;
+      d.innerHTML = `<div style="font-weight:650">${ch.title}</div><div class="muted">${ch.date||""}</div>`;
+      d.onclick=()=>openChapter(book.id, ch.id);
+      toc.appendChild(d);
+
+      if(state.book===book.id && state.chapter===ch.id) d.classList.add("active");
+    }
+  }
+}
+
+home.onclick = ()=>{ state.book=null; state.chapter=null; save(); title.textContent="欢迎"; meta.textContent=""; content.className="muted"; content.textContent="左侧选择一本小说与章节开始阅读。"; };
+q.addEventListener("input", ()=>renderTOC(q.value.trim()));
+
+(async function init(){
+  await loadLib();
+  renderTOC("");
+  if(state.book && state.chapter){
+    await openChapter(state.book, state.chapter);
+  } else {
+    prev.disabled = true; next.disabled = true;
+  }
+})();
+</script>
+</body>
+</html>
