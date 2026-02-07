@@ -22,6 +22,11 @@
         { "id": "c16", "title": "后记", "date": "2026-02-06", "path": "./content/content/tongju/c16.md" },
         { "id": "c17", "title": "番外", "date": "2026-02-07", "path": "./content/content/tongju/c17.md" }
       ]
-    }
+    },
+    {
+     "id": "yibujiekong",
+     "title": "《一步皆空》",
+     "chapters": [
+       { "id": "c1", "title": "第一章", "date": "2026-02-07", "path": "./content/content/jiekong/c1.md" }     
   ]
 }
