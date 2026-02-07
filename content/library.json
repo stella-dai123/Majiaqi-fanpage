@@ -29,7 +29,9 @@
       "chapters": [
         { "id": "b1", "title": "第一章", "date": "2026-02-07", "path": "./content/content/yibujiekong/b1.md" },
         { "id": "b2", "title": "第二章", "date": "2026-02-07", "path": "./content/content/yibujiekong/b2.md" },
-        { "id": "b3", "title": "第三章", "date": "2026-02-07", "path": "./content/content/yibujiekong/b3.md" }
+        { "id": "b3", "title": "第三章", "date": "2026-02-07", "path": "./content/content/yibujiekong/b3.md" }，
+        { "id": "b4", "title": "第四章", "date": "2026-02-07", "path": "./content/content/yibujiekong/b4.md" }，
+        { "id": "b5", "title": "第五章", "date": "2026-02-07", "path": "./content/content/yibujiekong/b5.md" }
       ]
     }
   ]
