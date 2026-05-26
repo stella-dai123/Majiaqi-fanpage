@@ -1,0 +1,422 @@
+import React, { useMemo, useState, useEffect } from "react";
+import { CheckCircle2, XCircle, Folder, BookOpen, Plus, Search, ChevronRight, Upload, Trash2, Database } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+
+const starterSubjects = [
+  {
+    id: "physiology",
+    name: "Animal Physiology",
+    color: "bg-slate-900",
+    sets: [
+      {
+        id: "muscle",
+        name: "Muscle & Nervous System",
+        questions: [
+          {
+            id: crypto.randomUUID(),
+            prompt: "What directly triggers skeletal muscle contraction?",
+            choices: ["ATP binding to myosin", "Ca²⁺ binding to troponin", "Na⁺ leaving the cell", "O₂ binding to hemoglobin"],
+            answer: 1,
+            explanation: "Ca²⁺ binds to troponin, which moves tropomyosin away from actin so myosin can form crossbridges."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    id: "gre",
+    name: "GRE Vocabulary",
+    color: "bg-indigo-600",
+    sets: [
+      {
+        id: "vocab1",
+        name: "High-frequency Words",
+        questions: [
+          {
+            id: crypto.randomUUID(),
+            prompt: "Choose the word closest in meaning to ‘laconic.’",
+            choices: ["talkative", "brief", "angry", "careless"],
+            answer: 1,
+            explanation: "Laconic means using very few words; concise or brief."
+          }
+        ]
+      }
+    ]
+  }
+];
+
+function parseQuestions(rawText) {
+  const text = rawText.replace(/\r/g, "").trim();
+  if (!text) return [];
+
+  const blocks = text
+    .split(/\n\s*\n(?=\s*(?:\d+\.|Question\s*\d*[:.]?|Q\d*[:.]?))/i)
+    .map((b) => b.trim())
+    .filter(Boolean);
+
+  return blocks.map((block) => {
+    const lines = block.split("\n").map((l) => l.trim()).filter(Boolean);
+    let promptLines = [];
+    let choices = [];
+    let answerLetter = "";
+    let explanationLines = [];
+    let mode = "prompt";
+
+    for (const line of lines) {
+      const choiceMatch = line.match(/^([A-Ha-h])[\).:\-]\s*(.+)$/);
+      const answerMatch = line.match(/^(?:Answer|Correct Answer|Correct|Ans)\s*[:\-]\s*([A-Ha-h]|.+)$/i);
+      const explanationMatch = line.match(/^(?:Explanation|Reason|Why|解析|解释)\s*[:\-]\s*(.*)$/i);
+
+      if (choiceMatch) {
+        mode = "choices";
+        choices.push(choiceMatch[2].trim());
+      } else if (answerMatch) {
+        mode = "answer";
+        const rawAnswer = answerMatch[1].trim();
+        answerLetter = rawAnswer[0];
+      } else if (explanationMatch) {
+        mode = "explanation";
+        if (explanationMatch[1]) explanationLines.push(explanationMatch[1].trim());
+      } else if (mode === "explanation") {
+        explanationLines.push(line);
+      } else if (mode === "prompt" || mode === "choices") {
+        const cleaned = line
+          .replace(/^Question\s*\d*[:.]?\s*/i, "")
+          .replace(/^Q\d*[:.]?\s*/i, "")
+          .replace(/^\d+[\).]\s*/, "");
+        promptLines.push(cleaned);
+      }
+    }
+
+    const answerIndex = answerLetter ? answerLetter.toUpperCase().charCodeAt(0) - 65 : -1;
+
+    return {
+      id: crypto.randomUUID(),
+      prompt: promptLines.join(" ").trim() || "Untitled question",
+      choices,
+      answer: answerIndex >= 0 && answerIndex < choices.length ? answerIndex : 0,
+      explanation: explanationLines.join(" ").trim() || "No explanation added yet."
+    };
+  }).filter((q) => q.choices.length >= 2);
+}
+
+export default function QuizPlatformPreview() {
+  const [subjects, setSubjects] = useState(() => {
+    const saved = localStorage.getItem("quiz-platform-subjects");
+    return saved ? JSON.parse(saved) : starterSubjects;
+  });
+  const [selectedSubjectId, setSelectedSubjectId] = useState(subjects[0]?.id || "");
+  const [selectedSetId, setSelectedSetId] = useState(subjects[0]?.sets[0]?.id || "");
+  const [selectedAnswers, setSelectedAnswers] = useState({});
+  const [query, setQuery] = useState("");
+  const [importText, setImportText] = useState(`1. What directly triggers skeletal muscle contraction?\nA. ATP binding to myosin\nB. Ca²⁺ binding to troponin\nC. Na⁺ leaving the cell\nD. O₂ binding to hemoglobin\nAnswer: B\nExplanation: Ca²⁺ binds to troponin and allows actin-myosin crossbridge formation.\n\n2. Complete tetanus happens when:\nA. muscle fully relaxes between stimuli\nB. stimuli are so frequent that relaxation disappears\nC. ATP is completely absent\nD. the nerve stops firing\nAnswer: B\nExplanation: Very frequent stimulation keeps Ca²⁺ high, so the muscle stays contracted.`);
+  const [newSubjectName, setNewSubjectName] = useState("");
+  const [newSetName, setNewSetName] = useState("");
+  const [importMessage, setImportMessage] = useState("");
+
+  useEffect(() => {
+    localStorage.setItem("quiz-platform-subjects", JSON.stringify(subjects));
+  }, [subjects]);
+
+  const selectedSubject = subjects.find((s) => s.id === selectedSubjectId) || subjects[0];
+  const selectedSet = selectedSubject?.sets.find((set) => set.id === selectedSetId) || selectedSubject?.sets[0];
+
+  const filteredQuestions = useMemo(() => {
+    if (!selectedSet) return [];
+    return selectedSet.questions.filter((q) =>
+      q.prompt.toLowerCase().includes(query.toLowerCase())
+    );
+  }, [selectedSet, query]);
+
+  const totalAnswered = selectedSet?.questions.filter((q) => selectedAnswers[q.id] !== undefined).length || 0;
+  const correctCount = selectedSet?.questions.filter((q) => selectedAnswers[q.id] === q.answer).length || 0;
+
+  function chooseAnswer(questionId, index) {
+    setSelectedAnswers((prev) => ({ ...prev, [questionId]: index }));
+  }
+
+  function switchSubject(subject) {
+    setSelectedSubjectId(subject.id);
+    setSelectedSetId(subject.sets[0]?.id || "");
+    setSelectedAnswers({});
+    setImportMessage("");
+  }
+
+  function addSubject() {
+    const name = newSubjectName.trim();
+    if (!name) return;
+    const newSubject = {
+      id: crypto.randomUUID(),
+      name,
+      color: "bg-slate-600",
+      sets: [{ id: crypto.randomUUID(), name: "Default Set", questions: [] }]
+    };
+    setSubjects((prev) => [...prev, newSubject]);
+    setSelectedSubjectId(newSubject.id);
+    setSelectedSetId(newSubject.sets[0].id);
+    setNewSubjectName("");
+  }
+
+  function addSet() {
+    const name = newSetName.trim();
+    if (!name || !selectedSubject) return;
+    const newSet = { id: crypto.randomUUID(), name, questions: [] };
+    setSubjects((prev) =>
+      prev.map((subject) =>
+        subject.id === selectedSubject.id
+          ? { ...subject, sets: [...subject.sets, newSet] }
+          : subject
+      )
+    );
+    setSelectedSetId(newSet.id);
+    setNewSetName("");
+  }
+
+  function importQuestions() {
+    if (!selectedSubject || !selectedSet) return;
+    const parsed = parseQuestions(importText);
+    if (!parsed.length) {
+      setImportMessage("No valid questions found. Make sure each question has choices like A. B. C. D. and an Answer line.");
+      return;
+    }
+    setSubjects((prev) =>
+      prev.map((subject) =>
+        subject.id === selectedSubject.id
+          ? {
+              ...subject,
+              sets: subject.sets.map((set) =>
+                set.id === selectedSet.id
+                  ? { ...set, questions: [...set.questions, ...parsed] }
+                  : set
+              )
+            }
+          : subject
+      )
+    );
+    setImportMessage(`Imported ${parsed.length} question${parsed.length > 1 ? "s" : ""} into ${selectedSet.name}.`);
+  }
+
+  function resetAll() {
+    localStorage.removeItem("quiz-platform-subjects");
+    setSubjects(starterSubjects);
+    setSelectedSubjectId(starterSubjects[0].id);
+    setSelectedSetId(starterSubjects[0].sets[0].id);
+    setSelectedAnswers({});
+    setImportMessage("Demo data restored.");
+  }
+
+  return (
+    <div className="min-h-screen bg-slate-50 text-slate-900">
+      <div className="mx-auto max-w-7xl px-6 py-8">
+        <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <p className="mb-2 text-sm font-medium text-slate-500">Study Question Bank</p>
+            <h1 className="text-3xl font-semibold tracking-tight">Quiz Practice Platform</h1>
+            <p className="mt-2 max-w-2xl text-sm text-slate-500">
+              Create subject folders, paste questions in bulk, auto-detect answers and explanations, then practice instantly.
+            </p>
+          </div>
+          <Button onClick={resetAll} className="w-fit rounded-2xl bg-slate-900 px-5 py-5 text-white hover:bg-slate-800">
+            <Database className="mr-2 h-4 w-4" /> Reset Demo
+          </Button>
+        </div>
+
+        <div className="grid gap-5 lg:grid-cols-[280px_1fr]">
+          <Card className="rounded-3xl border-slate-200 shadow-sm">
+            <CardContent className="p-4">
+              <div className="mb-4 flex items-center gap-2 px-2 text-sm font-semibold text-slate-500">
+                <Folder className="h-4 w-4" /> Subjects
+              </div>
+              <div className="space-y-2">
+                {subjects.map((subject) => (
+                  <button
+                    key={subject.id}
+                    onClick={() => switchSubject(subject)}
+                    className={`flex w-full items-center justify-between rounded-2xl px-3 py-3 text-left transition ${
+                      selectedSubjectId === subject.id
+                        ? "bg-slate-900 text-white shadow-sm"
+                        : "bg-white text-slate-700 hover:bg-slate-100"
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className={`h-3 w-3 rounded-full ${subject.color}`} />
+                      <span className="text-sm font-medium">{subject.name}</span>
+                    </div>
+                    <ChevronRight className="h-4 w-4 opacity-60" />
+                  </button>
+                ))}
+              </div>
+
+              <div className="mt-5 space-y-2 rounded-2xl bg-slate-100 p-3">
+                <input
+                  value={newSubjectName}
+                  onChange={(e) => setNewSubjectName(e.target.value)}
+                  placeholder="New subject name"
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-400"
+                />
+                <Button onClick={addSubject} className="w-full rounded-xl bg-white text-slate-800 hover:bg-slate-50">
+                  <Plus className="mr-2 h-4 w-4" /> Add Subject
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          <div className="space-y-5">
+            <Card className="rounded-3xl border-slate-200 shadow-sm">
+              <CardContent className="p-5">
+                <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                  <div>
+                    <div className="mb-2 flex items-center gap-2 text-sm font-medium text-slate-500">
+                      <BookOpen className="h-4 w-4" /> Current Folder
+                    </div>
+                    <h2 className="text-2xl font-semibold">{selectedSubject?.name}</h2>
+                  </div>
+                  <div className="grid grid-cols-3 gap-3 text-center">
+                    <div className="rounded-2xl bg-slate-100 px-4 py-3">
+                      <div className="text-lg font-semibold">{selectedSet?.questions.length || 0}</div>
+                      <div className="text-xs text-slate-500">Questions</div>
+                    </div>
+                    <div className="rounded-2xl bg-slate-100 px-4 py-3">
+                      <div className="text-lg font-semibold">{totalAnswered}</div>
+                      <div className="text-xs text-slate-500">Answered</div>
+                    </div>
+                    <div className="rounded-2xl bg-slate-100 px-4 py-3">
+                      <div className="text-lg font-semibold">{correctCount}</div>
+                      <div className="text-xs text-slate-500">Correct</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                  <div className="flex flex-wrap gap-2">
+                    {selectedSubject?.sets.map((set) => (
+                      <button
+                        key={set.id}
+                        onClick={() => {
+                          setSelectedSetId(set.id);
+                          setSelectedAnswers({});
+                        }}
+                        className={`rounded-full px-4 py-2 text-sm font-medium transition ${
+                          selectedSetId === set.id
+                            ? "bg-slate-900 text-white"
+                            : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                        }`}
+                      >
+                        {set.name}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="flex gap-2">
+                    <input
+                      value={newSetName}
+                      onChange={(e) => setNewSetName(e.target.value)}
+                      placeholder="New folder"
+                      className="w-36 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400"
+                    />
+                    <Button onClick={addSet} className="rounded-2xl bg-slate-900 text-white hover:bg-slate-800">Add</Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="rounded-3xl border-slate-200 shadow-sm">
+              <CardContent className="p-5">
+                <div className="mb-3 flex items-center justify-between">
+                  <div>
+                    <h3 className="text-lg font-semibold">Paste & Auto Import</h3>
+                    <p className="mt-1 text-sm text-slate-500">Supports A/B/C/D choices, Answer, Correct Answer, Explanation, Reason, 解释, 解析.</p>
+                  </div>
+                  <Upload className="h-5 w-5 text-slate-400" />
+                </div>
+                <textarea
+                  value={importText}
+                  onChange={(e) => setImportText(e.target.value)}
+                  className="h-56 w-full rounded-2xl border border-slate-200 bg-white p-4 text-sm leading-relaxed outline-none focus:border-slate-400"
+                  placeholder="Paste questions here..."
+                />
+                <div className="mt-3 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                  <p className="text-sm text-slate-500">Import target: <span className="font-semibold text-slate-700">{selectedSubject?.name} / {selectedSet?.name}</span></p>
+                  <Button onClick={importQuestions} className="rounded-2xl bg-slate-900 px-5 text-white hover:bg-slate-800">
+                    <Upload className="mr-2 h-4 w-4" /> Import Questions
+                  </Button>
+                </div>
+                {importMessage && <div className="mt-3 rounded-2xl bg-slate-100 px-4 py-3 text-sm text-slate-700">{importMessage}</div>}
+              </CardContent>
+            </Card>
+
+            <Card className="rounded-3xl border-slate-200 shadow-sm">
+              <CardContent className="p-5">
+                <div className="relative w-full">
+                  <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+                  <input
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    placeholder="Search questions..."
+                    className="w-full rounded-2xl border border-slate-200 bg-white py-2 pl-9 pr-3 text-sm outline-none focus:border-slate-400"
+                  />
+                </div>
+              </CardContent>
+            </Card>
+
+            <div className="space-y-4">
+              {filteredQuestions.map((question, index) => {
+                const chosen = selectedAnswers[question.id];
+                const isAnswered = chosen !== undefined;
+                const isCorrect = chosen === question.answer;
+
+                return (
+                  <Card key={question.id} className="rounded-3xl border-slate-200 shadow-sm">
+                    <CardContent className="p-6">
+                      <div className="mb-4 flex items-start justify-between gap-4">
+                        <div>
+                          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                            Question {index + 1}
+                          </p>
+                          <h3 className="text-lg font-semibold leading-relaxed">{question.prompt}</h3>
+                        </div>
+                        {isAnswered && (
+                          <div className={`flex items-center gap-1 rounded-full px-3 py-1 text-sm font-medium ${isCorrect ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
+                            {isCorrect ? <CheckCircle2 className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}
+                            {isCorrect ? "Correct" : "Incorrect"}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="grid gap-3 md:grid-cols-2">
+                        {question.choices.map((choice, choiceIndex) => {
+                          const selected = chosen === choiceIndex;
+                          const correct = question.answer === choiceIndex;
+                          let style = "border-slate-200 bg-white hover:bg-slate-50";
+                          if (isAnswered && correct) style = "border-green-300 bg-green-50 text-green-800";
+                          if (isAnswered && selected && !correct) style = "border-red-300 bg-red-50 text-red-800";
+
+                          return (
+                            <button
+                              key={`${question.id}-${choiceIndex}`}
+                              onClick={() => chooseAnswer(question.id, choiceIndex)}
+                              className={`rounded-2xl border px-4 py-3 text-left text-sm font-medium transition ${style}`}
+                            >
+                              <span className="mr-2 text-slate-400">{String.fromCharCode(65 + choiceIndex)}.</span>
+                              {choice}
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      {isAnswered && (
+                        <div className="mt-4 rounded-2xl bg-slate-100 px-4 py-3 text-sm leading-relaxed text-slate-700">
+                          <span className="font-semibold">Explanation: </span>{question.explanation}
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
